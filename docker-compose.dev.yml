@@ -1,0 +1,17 @@
+services:
+  riparr-dev:
+    image: ghcr.io/fofola1/riparr:dev
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: riparr-dev
+    ports:
+      - "8081:8080" # Bind to dev port 8081 on host
+    volumes:
+      # Isolate development downloads and DB from production data
+      - ./downloads_dev:/downloads
+    environment:
+      - API_KEY=dev-token
+      - TZ=Europe/Bratislava
+      - ASPNETCORE_ENVIRONMENT=Development
+    restart: "no"

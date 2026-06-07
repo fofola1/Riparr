@@ -1,0 +1,18 @@
+services:
+  riparr:
+    image: ghcr.io/fofola1/riparr:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: riparr
+    ports:
+      - "8080:8080"
+    volumes:
+      # Map the downloads directory to the host.
+      # Contains /downloads/completed, /downloads/incomplete, and downloads.db
+      - ./downloads:/downloads
+    environment:
+      - API_KEY=riparr-token
+      - TZ=Europe/Bratislava
+      - ASPNETCORE_ENVIRONMENT=Production
+    restart: unless-stopped
