@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -23,6 +24,62 @@ namespace Riparr.Services
         {
             _serviceProvider = serviceProvider;
             _logger = logger;
+        }
+
+        public bool IsQueuePaused { get; set; } = false;
+
+        public void PauseQueue()
+        {
+            IsQueuePaused = true;
+            _logger.LogInformation("Queue paused globally.");
+            
+            // Cancel all active downloads
+            foreach (var jobId in _activeTokens.Keys.ToList())
+            {
+                try
+                {
+                    using var scope = _serviceProvider.CreateScope();
+                    var db = scope.ServiceProvider.GetRequiredService<DownloadDbContext>();
+                    var dbJob = db.Downloads.Find(jobId);
+                    if (dbJob != null && dbJob.Status == "Downloading")
+                    {
+                        dbJob.Status = "Paused";
+                        dbJob.Speed = "0 B/s";
+                        dbJob.UpdatedAt = DateTime.UtcNow;
+                        db.SaveChanges();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error updating DB to Paused for job {JobId} during global pause.", jobId);
+                }
+
+                CancelJob(jobId);
+            }
+        }
+
+        public void ResumeQueue()
+        {
+            IsQueuePaused = false;
+            _logger.LogInformation("Queue resumed globally.");
+            
+            try
+            {
+                using var scope = _serviceProvider.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<DownloadDbContext>();
+                var pausedJobs = db.Downloads.Where(x => x.Status == "Paused").ToList();
+                foreach (var job in pausedJobs)
+                {
+                    job.Status = "Queued";
+                    job.Speed = "0 B/s";
+                    job.UpdatedAt = DateTime.UtcNow;
+                }
+                db.SaveChanges();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error resetting Paused jobs to Queued during global resume.");
+            }
         }
 
         public bool CancelJob(string jobId)
@@ -52,6 +109,19 @@ namespace Riparr.Services
             {
                 var db = scope.ServiceProvider.GetRequiredService<DownloadDbContext>();
                 await db.Database.EnsureCreatedAsync(stoppingToken);
+
+                // Add Category column if not exists (for backward compatibility with older DB files)
+                try
+                {
+                    await db.Database.ExecuteSqlRawAsync(
+                        "ALTER TABLE Downloads ADD COLUMN Category TEXT NOT NULL DEFAULT 'tv';", 
+                        stoppingToken);
+                    _logger.LogInformation("Database verified: Category column present.");
+                }
+                catch (Exception)
+                {
+                    // Ignore error if column already exists
+                }
                 
                 // Reset any previously downloading jobs to Queued on startup (handling crashes/restarts)
                 var activeJobs = db.Downloads.Where(x => x.Status == "Downloading").ToList();
@@ -70,6 +140,12 @@ namespace Riparr.Services
 
             while (!stoppingToken.IsCancellationRequested)
             {
+                if (IsQueuePaused)
+                {
+                    await Task.Delay(1000, stoppingToken);
+                    continue;
+                }
+
                 DownloadJob? jobToProcess = null;
 
                 using (var scope = _serviceProvider.CreateScope())
@@ -162,6 +238,18 @@ namespace Riparr.Services
                                 try
                                 {
                                     string finalPath = HandleFileCompletion(dbJob, startTime);
+                                    
+                                    // Validate video duration to prevent placeholder/empty video imports
+                                    double duration = GetVideoDuration(finalPath);
+                                    if (duration >= 0 && duration < 10.0)
+                                    {
+                                        if (File.Exists(finalPath))
+                                        {
+                                            File.Delete(finalPath);
+                                        }
+                                        throw new Exception($"Downloaded video is too short ({duration:F1}s). Likely a placeholder or failed stream.");
+                                    }
+
                                     dbJob.Status = "Completed";
                                     dbJob.Progress = 100.0;
                                     dbJob.Speed = "0 B/s";
@@ -172,16 +260,37 @@ namespace Riparr.Services
                                 {
                                     dbJob.Status = "Failed";
                                     dbJob.ErrorMessage = $"File post-processing error: {ex.Message}";
+                                    dbJob.Progress = 0.0;
+                                    dbJob.Speed = "0 B/s";
                                     _logger.LogError(ex, "Failed file post-processing for job {JobId}.", dbJob.Id);
                                 }
                             }
                             else
                             {
-                                dbJob.Status = jobCts.IsCancellationRequested ? "Deleted" : "Failed";
-                                dbJob.ErrorMessage = dbJob.ErrorMessage ?? jobToProcess.ErrorMessage ?? "Download cancelled or failed.";
-                                dbJob.Speed = "0 B/s";
-                                CleanPartialFiles(dbJob);
-                                _logger.LogWarning("Job {JobId} failed or cancelled. Status: {Status}. Error: {Error}", dbJob.Id, dbJob.Status, dbJob.ErrorMessage);
+                                if (dbJob.Status == "Paused")
+                                {
+                                    dbJob.Speed = "0 B/s";
+                                    _logger.LogInformation("Job {JobId} is paused in database.", dbJob.Id);
+                                }
+                                else if (jobCts.IsCancellationRequested)
+                                {
+                                    dbJob.Status = "Deleted";
+                                    dbJob.ErrorMessage = "Download was cancelled.";
+                                    dbJob.Speed = "0 B/s";
+                                    CleanPartialFiles(dbJob);
+                                    _logger.LogInformation("Job {JobId} was cancelled.", dbJob.Id);
+                                }
+                                else
+                                {
+                                    // Download failed. The history endpoint always reports "Completed"
+                                    // to *arr apps so they won't retry. No placeholder files needed.
+                                    dbJob.Status = "Failed";
+                                    dbJob.ErrorMessage = dbJob.ErrorMessage ?? jobToProcess.ErrorMessage ?? "Download failed.";
+                                    dbJob.Speed = "0 B/s";
+                                    dbJob.Progress = 0.0;
+                                    CleanPartialFiles(dbJob);
+                                    _logger.LogWarning("Job {JobId} failed. Error: {Error}", dbJob.Id, dbJob.ErrorMessage);
+                                }
                             }
 
                             dbJob.UpdatedAt = DateTime.UtcNow;
@@ -205,9 +314,13 @@ namespace Riparr.Services
             AppConfig.EnsureDirectoriesExist();
             string finalDest = Path.Combine(AppConfig.CompletedFolder, job.Filename);
 
+            bool isMockUrl = job.StreamUrl.Contains("example-streaming.com", StringComparison.OrdinalIgnoreCase) ||
+                             job.StreamUrl.Contains("example.com", StringComparison.OrdinalIgnoreCase);
+
             bool isAniCli = job.StreamUrl.StartsWith("ani-cli:", StringComparison.OrdinalIgnoreCase) || 
                             string.IsNullOrEmpty(job.StreamUrl) || 
-                            job.StreamUrl.Equals("ani-cli", StringComparison.OrdinalIgnoreCase);
+                            job.StreamUrl.Equals("ani-cli", StringComparison.OrdinalIgnoreCase) ||
+                            isMockUrl;
 
             if (isAniCli)
             {
@@ -303,6 +416,37 @@ namespace Riparr.Services
             {
                 _logger.LogWarning(ex, "Failed to clean partial download files for job {JobId}.", job.Id);
             }
+        }
+
+        private double GetVideoDuration(string filePath)
+        {
+            try
+            {
+                var startInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "ffprobe",
+                    Arguments = $"-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \"{filePath}\"",
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+
+                using var process = System.Diagnostics.Process.Start(startInfo);
+                if (process == null) return -1;
+
+                string output = process.StandardOutput.ReadToEnd().Trim();
+                process.WaitForExit();
+
+                if (process.ExitCode == 0 && double.TryParse(output, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double duration))
+                {
+                    return duration;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get video duration for {FilePath} using ffprobe.", filePath);
+            }
+            return -1;
         }
     }
 }

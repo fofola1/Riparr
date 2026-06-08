@@ -60,7 +60,7 @@ namespace Riparr.Models
         public string Filename { get; set; } = string.Empty;
 
         [JsonPropertyName("percentage")]
-        public string Percentage { get; set; } = "0";
+        public int Percentage { get; set; } = 0;
 
         [JsonPropertyName("size")]
         public string Size { get; set; } = "0 MB";

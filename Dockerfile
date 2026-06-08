@@ -14,7 +14,7 @@ RUN dotnet publish -c Release -o /app
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
-# Install system utilities, ffmpeg, aria2, and python3 (needed by yt-dlp)
+# Install system utilities, ffmpeg, aria2, python3 (needed by yt-dlp), and fzf (needed by ani-cli)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
@@ -22,6 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     aria2 \
     python3 \
     git \
+    fzf \
     && rm -rf /var/lib/apt/lists/*
 
 # Install the latest yt-dlp binary

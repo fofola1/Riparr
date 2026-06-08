@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Riparr Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="glass-bg"></div>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="brand">
+                <i class="fa-solid fa-cloud-arrow-down brand-icon"></i>
+                <span class="brand-text">Riparr</span>
+            </div>
+            <nav class="nav-menu">
+                <button class="nav-btn active" data-tab="queue-tab">
+                    <i class="fa-solid fa-download"></i> Queue
+                </button>
+                <button class="nav-btn" data-tab="history-tab">
+                    <i class="fa-solid fa-clock-rotate-left"></i> History
+                </button>
+                <button class="nav-btn" data-tab="add-tab">
+                    <i class="fa-solid fa-plus"></i> Add Download
+                </button>
+                <button class="nav-btn" data-tab="settings-tab">
+                    <i class="fa-solid fa-sliders"></i> Settings
+                </button>
+            </nav>
+            <div class="status-footer">
+                <div class="status-indicator">
+                    <span class="status-dot green" id="conn-dot"></span>
+                    <span id="conn-text">API Online</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Panel -->
+        <main class="main-content">
+            <!-- Global Stats Bar -->
+            <header class="stats-bar">
+                <div class="stat-card">
+                    <span class="stat-label">Download Speed</span>
+                    <span class="stat-value" id="global-speed">0 B/s</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Queue Size Left</span>
+                    <span class="stat-value" id="global-sizeleft">0.0 MB</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Queue Status</span>
+                    <span class="stat-value" id="global-status">Idle</span>
+                </div>
+            </header>
+
+            <!-- Tab Panels -->
+            <div class="tab-panels">
+                
+                <!-- Queue Tab -->
+                <section id="queue-tab" class="tab-panel active">
+                    <div class="section-header">
+                        <h2>Active Downloads</h2>
+                        <div class="header-actions">
+                            <button class="btn btn-primary" id="btn-pause-all" title="Pause entire queue">
+                                <i class="fa-solid fa-pause"></i> Pause All
+                            </button>
+                            <button class="btn btn-secondary" id="btn-resume-all" style="display: none;" title="Resume entire queue">
+                                <i class="fa-solid fa-play"></i> Resume All
+                            </button>
+                            <button class="btn btn-danger" id="btn-purge-queue" title="Cancel and delete all queue items">
+                                <i class="fa-solid fa-trash-can"></i> Purge Queue
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="card-list" id="queue-list">
+                        <!-- Queue items will be rendered dynamically here -->
+                        <div class="empty-state">
+                            <i class="fa-solid fa-circle-check"></i>
+                            <p>Queue is empty. No active downloads.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- History Tab -->
+                <section id="history-tab" class="tab-panel">
+                    <div class="section-header">
+                        <h2>Download History</h2>
+                        <div class="header-actions">
+                            <button class="btn btn-danger" id="btn-purge-history" title="Clear history lists">
+                                <i class="fa-solid fa-broom"></i> Clear History
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="table-container">
+                        <table class="history-table">
+                            <thead>
+                                <tr>
+                                    <th>Filename</th>
+                                    <th>Size</th>
+                                    <th>Status</th>
+                                    <th>Storage Location</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="history-rows">
+                                <!-- History rows will be rendered dynamically here -->
+                                <tr>
+                                    <td colspan="5" class="empty-table">
+                                        <i class="fa-solid fa-inbox"></i>
+                                        <p>No history entries found.</p>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Add Download Tab -->
+                <section id="add-tab" class="tab-panel">
+                    <div class="section-header">
+                        <h2>Add Manual Download</h2>
+                    </div>
+
+                    <div class="grid-layout">
+                        <!-- Option A: Paste Payload URL -->
+                        <div class="card form-card">
+                            <h3><i class="fa-solid fa-code"></i> Indexer URL / Payload</h3>
+                            <p class="form-desc">Paste a download URL containing a Base64-encoded `payload` parameter (or paste the Base64 string directly).</p>
+                            
+                            <div class="form-group">
+                                <label for="payload-input">Payload URL / Base64 String</label>
+                                <textarea id="payload-input" placeholder="http://localhost/download?payload=eyJzaXRlIjog..." rows="4"></textarea>
+                            </div>
+                            <button class="btn btn-primary w-full" id="btn-decode-payload">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i> Parse Payload
+                            </button>
+
+                            <div class="payload-preview" id="payload-preview-box" style="display: none;">
+                                <h4>Parsed Details:</h4>
+                                <pre id="payload-preview-code"></pre>
+                                <button class="btn btn-success w-full mt-2" id="btn-submit-payload">
+                                    <i class="fa-solid fa-cloud-arrow-down"></i> Queue Decoded Download
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Option B: Direct Details -->
+                        <div class="card form-card">
+                            <h3><i class="fa-solid fa-keyboard"></i> Direct Entry</h3>
+                            <p class="form-desc">Manually configure the download parameters to fetch media from a direct link or via ani-cli.</p>
+                            
+                            <form id="manual-download-form">
+                                <div class="form-group">
+                                    <label for="m-title">Title</label>
+                                    <input type="text" id="m-title" required placeholder="e.g. One Piece">
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="m-season">Season</label>
+                                        <input type="number" id="m-season" placeholder="e.g. 1">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="m-episode">Episode</label>
+                                        <input type="number" id="m-episode" required placeholder="e.g. 1000">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="m-url">Stream URL / Video link</label>
+                                    <input type="text" id="m-url" placeholder="Direct MP4 link, or leave empty for ani-cli search">
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="m-res">Resolution</label>
+                                        <input type="text" id="m-res" placeholder="e.g. 1080p">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="m-source">Source Group</label>
+                                        <input type="text" id="m-source" placeholder="e.g. HorribleSubs">
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-full">
+                                    <i class="fa-solid fa-plus"></i> Queue Download
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Settings Tab -->
+                <section id="settings-tab" class="tab-panel">
+                    <div class="section-header">
+                        <h2>System Configuration</h2>
+                    </div>
+
+                    <div class="card settings-card">
+                        <div class="settings-row">
+                            <div class="setting-info">
+                                <span class="setting-title">Completed Folder</span>
+                                <span class="setting-value" id="cfg-completed-dir">Loading...</span>
+                            </div>
+                            <i class="fa-solid fa-folder-open setting-icon"></i>
+                        </div>
+                        <div class="settings-row">
+                            <div class="setting-info">
+                                <span class="setting-title">Incomplete Folder</span>
+                                <span class="setting-value" id="cfg-incomplete-dir">Loading...</span>
+                            </div>
+                            <i class="fa-solid fa-foldersetting setting-icon"></i>
+                        </div>
+                        <div class="settings-row">
+                            <div class="setting-info">
+                                <span class="setting-title">API Authentication Key</span>
+                                <span class="setting-value" id="cfg-api-key">Loading...</span>
+                            </div>
+                            <i class="fa-solid fa-key setting-icon"></i>
+                        </div>
+                        <div class="settings-row">
+                            <div class="setting-info">
+                                <span class="setting-title">Supported Categories</span>
+                                <span class="setting-value">movies, tv, music, anime</span>
+                            </div>
+                            <i class="fa-solid fa-tags setting-icon"></i>
+                        </div>
+                    </div>
+                </section>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- API Key Modal -->
+    <div id="api-key-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-card">
+            <i class="fa-solid fa-lock modal-lock-icon"></i>
+            <h3>Authentication Required</h3>
+            <p class="form-desc" style="margin-bottom: 8px;">Please enter your Riparr API Key to access the dashboard.</p>
+            <div class="form-group" style="text-align: left; margin-bottom: 16px;">
+                <label for="modal-api-key-input">API Key</label>
+                <input type="password" id="modal-api-key-input" placeholder="Enter API Key">
+            </div>
+            <button class="btn btn-primary w-full" id="btn-submit-modal-key">
+                <i class="fa-solid fa-key"></i> Authenticate
+            </button>
+        </div>
+    </div>
+
+    <!-- Script Entry -->
+    <script src="js/app.js"></script>
+</body>
+</html>
