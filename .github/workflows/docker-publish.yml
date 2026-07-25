@@ -38,6 +38,7 @@ jobs:
           images: ghcr.io/${{ steps.repo.outputs.name }}
           tags: |
             type=semver,pattern={{version}}
+            type=sha
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v7
