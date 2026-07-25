@@ -14,7 +14,7 @@ RUN dotnet publish -c Release -o /app
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
-# Install system utilities, ffmpeg, aria2, python3 (needed by yt-dlp), and fzf (needed by ani-cli)
+# Install system utilities, ffmpeg, aria2, python3 (needed by yt-dlp), fzf, botan, and mpv (needed by ani-cli)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
@@ -23,6 +23,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     git \
     fzf \
+    botan \
+    mpv \
     && rm -rf /var/lib/apt/lists/*
 
 # Install the latest yt-dlp binary
@@ -30,7 +32,7 @@ RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o 
     && chmod a+rx /usr/bin/yt-dlp
 
 # Install the latest ani-cli script
-RUN curl -L https://raw.githubusercontent.com/pystardust/ani-cli/master/ani-cli -o /usr/bin/ani-cli \
+RUN curl -L -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" https://raw.githubusercontent.com/pystardust/ani-cli/master/ani-cli -o /usr/bin/ani-cli \
     && chmod a+rx /usr/bin/ani-cli
 
 # Set application variables

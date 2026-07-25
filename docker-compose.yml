@@ -1,18 +1,31 @@
 services:
+  otakarr:
+    image: ghcr.io/fofola1/otakarr:latest
+    build:
+      context: /data/repos/AniOwn-Indexer
+      dockerfile: Dockerfile
+    container_name: otakarr
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - DOWNLOADER_URL=http://riparr:8080/api/sabnzbd
+      - API_KEY=riparr-token
+
   riparr:
     image: ghcr.io/fofola1/riparr:latest
     build:
-      context: .
+      context: /data/repos/AniOwn-Downloader
       dockerfile: Dockerfile
     container_name: riparr
+    restart: unless-stopped
     ports:
       - "8080:8080"
     volumes:
-      # Map the downloads directory to the host.
-      # Contains /downloads/completed, /downloads/incomplete, and downloads.db
       - ./downloads:/downloads
     environment:
       - API_KEY=riparr-token
       - TZ=Europe/Bratislava
+      - PORT=8080
       - ASPNETCORE_ENVIRONMENT=Production
-    restart: unless-stopped
