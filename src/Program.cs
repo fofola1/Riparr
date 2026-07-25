@@ -37,6 +37,9 @@ builder.Services.AddDbContext<DownloadDbContext>(options =>
 builder.Services.AddSingleton<DownloadManager>();
 builder.Services.AddHostedService<DownloadManager>(sp => sp.GetRequiredService<DownloadManager>());
 
+builder.Services.AddSingleton<UpstreamUpdaterService>();
+builder.Services.AddHostedService<UpstreamUpdaterService>(sp => sp.GetRequiredService<UpstreamUpdaterService>());
+
 var app = builder.Build();
 
 // Ensure Directories are Created on App Start (especially the DB folder)
@@ -608,6 +611,35 @@ app.MapPost("/api", HandleSabnzbdRequest);
 
 app.MapGet("/sabnzbd/api", HandleSabnzbdRequest);
 app.MapPost("/sabnzbd/api", HandleSabnzbdRequest);
+
+app.MapGet("/download", HandleSabnzbdRequest);
+app.MapPost("/download", HandleSabnzbdRequest);
+
+app.MapGet("/api/download", HandleSabnzbdRequest);
+app.MapPost("/api/download", HandleSabnzbdRequest);
+
+// Tool auto-update status & trigger endpoints
+app.MapGet("/api/tools/status", (UpstreamUpdaterService updater) => Results.Ok(new
+{
+    lastCheck = updater.LastCheckTime,
+    aniCliVersion = updater.AniCliVersion,
+    ytDlpVersion = updater.YtDlpVersion,
+    lastError = updater.LastError,
+    toolsFolder = AppConfig.ToolsFolder
+}));
+
+app.MapPost("/api/tools/update", async (UpstreamUpdaterService updater) =>
+{
+    await updater.TriggerUpdateAsync();
+    return Results.Ok(new
+    {
+        status = true,
+        message = "Update check triggered",
+        aniCliVersion = updater.AniCliVersion,
+        ytDlpVersion = updater.YtDlpVersion,
+        lastError = updater.LastError
+    });
+});
 
 // Health check endpoint
 app.MapGet("/healthz", () => Results.Ok("Healthy"));

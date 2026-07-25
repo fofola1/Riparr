@@ -42,12 +42,12 @@ namespace Riparr.Services
 
             if (isTestEnv && isMockUrl)
             {
-                processName = "/usr/bin/sleep";
+                processName = ResolveExecutablePath("sleep");
                 arguments = "3";
             }
             else if (isAniCli)
             {
-                processName = "/usr/bin/ani-cli";
+                processName = ResolveExecutablePath("ani-cli");
                 string cleanTitle = CleanAnimeTitle(job.Title);
                 
                 int episodeNum = 1;
@@ -60,7 +60,7 @@ namespace Riparr.Services
             }
             else
             {
-                processName = "/usr/bin/yt-dlp";
+                processName = ResolveExecutablePath("yt-dlp");
                 // Download using yt-dlp to temp location in incomplete folder
                 arguments = $"-o \"{AppConfig.IncompleteFolder}/{job.Filename}.temp\" \"{job.StreamUrl}\"";
             }
@@ -76,10 +76,11 @@ namespace Riparr.Services
                 WorkingDirectory = workingDirectory
             };
 
-            // Set environment variable for ani-cli download directory
+            // Set environment variables for ani-cli download directory and player
             if (isAniCli)
             {
                 startInfo.EnvironmentVariables["ANI_CLI_DOWNLOAD_DIR"] = AppConfig.IncompleteFolder;
+                startInfo.EnvironmentVariables["ANI_CLI_PLAYER"] = "aria2c";
             }
 
             using var process = new Process();
@@ -286,6 +287,35 @@ namespace Riparr.Services
             }
 
             return 1;
+        }
+
+        private static string ResolveExecutablePath(string binaryName)
+        {
+            string toolsBin = Path.Combine(AppConfig.ToolsFolder, binaryName);
+            if (File.Exists(toolsBin))
+            {
+                return toolsBin;
+            }
+
+            string userLocalBin = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "bin", binaryName);
+            if (File.Exists(userLocalBin))
+            {
+                return userLocalBin;
+            }
+
+            string usrBin = $"/usr/bin/{binaryName}";
+            if (File.Exists(usrBin))
+            {
+                return usrBin;
+            }
+
+            string usrLocalBin = $"/usr/local/bin/{binaryName}";
+            if (File.Exists(usrLocalBin))
+            {
+                return usrLocalBin;
+            }
+
+            return binaryName;
         }
     }
 }

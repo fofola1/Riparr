@@ -15,6 +15,9 @@ namespace Riparr.Config
             Environment.GetEnvironmentVariable("DATABASE_PATH") ?? 
             (Directory.Exists("/downloads") ? "/downloads/downloads.db" : "downloads.db");
 
+        public static string ToolsFolder => 
+            Environment.GetEnvironmentVariable("DOWNLOADS_TOOLS_DIR") ?? "/downloads/tools";
+
         public static string? ApiKey => 
             Environment.GetEnvironmentVariable("API_KEY");
 
@@ -25,6 +28,7 @@ namespace Riparr.Config
         {
             Directory.CreateDirectory(CompletedFolder);
             Directory.CreateDirectory(IncompleteFolder);
+            Directory.CreateDirectory(ToolsFolder);
             
             var dbDir = Path.GetDirectoryName(Path.GetFullPath(DbPath));
             if (!string.IsNullOrEmpty(dbDir))
