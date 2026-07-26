@@ -312,7 +312,13 @@ namespace Riparr.Services
         private string HandleFileCompletion(DownloadJob job, DateTime startTime)
         {
             AppConfig.EnsureDirectoriesExist();
-            string finalDest = Path.Combine(AppConfig.CompletedFolder, job.Filename);
+            string targetDir = AppConfig.CompletedFolder;
+            if (!string.IsNullOrEmpty(job.Category) && !job.Category.Equals("*", StringComparison.OrdinalIgnoreCase))
+            {
+                targetDir = Path.Combine(AppConfig.CompletedFolder, job.Category);
+                Directory.CreateDirectory(targetDir);
+            }
+            string finalDest = Path.Combine(targetDir, job.Filename);
 
             bool isMockUrl = job.StreamUrl.Contains("example-streaming.com", StringComparison.OrdinalIgnoreCase) ||
                              job.StreamUrl.Contains("example.com", StringComparison.OrdinalIgnoreCase);
