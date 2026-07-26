@@ -81,6 +81,7 @@ namespace Riparr.Services
             {
                 startInfo.EnvironmentVariables["ANI_CLI_DOWNLOAD_DIR"] = AppConfig.IncompleteFolder;
                 startInfo.EnvironmentVariables["ANI_CLI_PLAYER"] = "aria2c";
+                startInfo.EnvironmentVariables["TERM"] = "xterm-256color";
             }
 
             using var process = new Process();
@@ -106,6 +107,47 @@ namespace Riparr.Services
 
             if (process.ExitCode != 0)
             {
+                // Fallback for ani-cli if initial selected index failed: retry without -S parameter
+                if (isAniCli && arguments.Contains("-S "))
+                {
+                    string cleanTitle = CleanAnimeTitle(job.Title);
+                    string fallbackArguments = $"-d -e {job.Episode} \"{cleanTitle}\"";
+                    
+                    var fallbackStartInfo = new ProcessStartInfo
+                    {
+                        FileName = processName,
+                        Arguments = fallbackArguments,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                        WorkingDirectory = workingDirectory
+                    };
+                    fallbackStartInfo.EnvironmentVariables["ANI_CLI_DOWNLOAD_DIR"] = AppConfig.IncompleteFolder;
+                    fallbackStartInfo.EnvironmentVariables["ANI_CLI_PLAYER"] = "aria2c";
+                    fallbackStartInfo.EnvironmentVariables["TERM"] = "xterm-256color";
+
+                    using var fallbackProcess = new Process();
+                    fallbackProcess.StartInfo = fallbackStartInfo;
+                    try
+                    {
+                        fallbackProcess.Start();
+                        var fallbackStdout = ReadAndParseStreamAsync(fallbackProcess.StandardOutput, onProgressUpdate, null, cancellationToken);
+                        var fallbackStderr = ReadAndParseStreamAsync(fallbackProcess.StandardError, onProgressUpdate, stderrBuilder, cancellationToken);
+                        var fallbackExit = fallbackProcess.WaitForExitAsync(cancellationToken);
+                        await Task.WhenAll(fallbackStdout, fallbackStderr, fallbackExit);
+
+                        if (fallbackProcess.ExitCode == 0)
+                        {
+                            return true;
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        // Ignore fallback launch errors and proceed to report original failure
+                    }
+                }
+
                 var stderrContent = stderrBuilder.ToString().Trim();
                 job.ErrorMessage = $"Process exited with code {process.ExitCode}. Stderr: {stderrContent}";
                 return false;
@@ -255,13 +297,17 @@ namespace Riparr.Services
                         showsEl.TryGetProperty("edges", out var edgesEl) &&
                         edgesEl.ValueKind == JsonValueKind.Array)
                     {
+                        int bestIndex = 1;
+                        int maxEpisodes = -1;
                         int currentIndex = 1;
+
                         foreach (var edge in edgesEl.EnumerateArray())
                         {
+                            string showName = edge.TryGetProperty("name", out var nameProp) ? nameProp.GetString() ?? "" : "";
+                            int subCount = 0;
+                            int dubCount = 0;
                             if (edge.TryGetProperty("availableEpisodes", out var epEl))
                             {
-                                int subCount = 0;
-                                int dubCount = 0;
                                 if (epEl.TryGetProperty("sub", out var subEl) && subEl.ValueKind == JsonValueKind.Number)
                                 {
                                     subCount = subEl.GetInt32();
@@ -270,14 +316,30 @@ namespace Riparr.Services
                                 {
                                     dubCount = dubEl.GetInt32();
                                 }
+                            }
 
-                                if (subCount >= episode || dubCount >= episode)
+                            int totalEp = Math.Max(subCount, dubCount);
+                            if (totalEp >= episode)
+                            {
+                                bool isTitleMatch = showName.Equals(cleanTitle, StringComparison.OrdinalIgnoreCase) ||
+                                                     showName.Contains(cleanTitle, StringComparison.OrdinalIgnoreCase) ||
+                                                     cleanTitle.Contains(showName, StringComparison.OrdinalIgnoreCase);
+
+                                if (isTitleMatch && totalEp > maxEpisodes)
                                 {
-                                    return currentIndex;
+                                    maxEpisodes = totalEp;
+                                    bestIndex = currentIndex;
+                                }
+                                else if (maxEpisodes == -1 && totalEp > maxEpisodes)
+                                {
+                                    maxEpisodes = totalEp;
+                                    bestIndex = currentIndex;
                                 }
                             }
                             currentIndex++;
                         }
+
+                        return bestIndex;
                     }
                 }
             }
