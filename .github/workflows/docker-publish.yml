@@ -36,8 +36,12 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ steps.repo.outputs.name }}
+          flavor: |
+            latest=true
           tags: |
             type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
             type=sha
 
       - name: Build and push Docker image
