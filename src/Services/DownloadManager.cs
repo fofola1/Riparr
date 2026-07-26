@@ -352,6 +352,7 @@ namespace Riparr.Services
                 }
                 
                 File.Move(downloadedFile.FullName, finalDest);
+                SetUniversalPermissions(finalDest);
 
                 // Clean up any parent directory if ani-cli created a subfolder and it is empty
                 if (downloadedFile.DirectoryName != null && 
@@ -394,7 +395,25 @@ namespace Riparr.Services
                 File.Move(tempFile, finalDest);
             }
 
+            SetUniversalPermissions(finalDest);
             return finalDest;
+        }
+
+        private void SetUniversalPermissions(string path)
+        {
+            try
+            {
+                if (OperatingSystem.IsLinux() || OperatingSystem.IsFreeBSD() || OperatingSystem.IsMacOS())
+                {
+                    File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+                                               UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute |
+                                               UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to set Unix permissions on {Path}", path);
+            }
         }
 
         private void CleanPartialFiles(DownloadJob job)

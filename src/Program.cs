@@ -349,12 +349,15 @@ async Task HandleSabnzbdRequest(HttpContext context, DownloadDbContext db, Downl
 
         case "status":
         case "qstatus":
+        case "fullstatus":
+        case "server_stats":
+        case "warnings":
             await HandleGetQueueAsync(context, db, downloadManager);
             break;
 
         default:
-            context.Response.StatusCode = 400;
-            await context.Response.WriteAsJsonAsync(new { status = false, error = $"Unsupported mode: {mode}" });
+            logger.LogInformation("Unrecognized SABnzbd mode '{Mode}' requested, returning default queue status with 200 OK.", mode);
+            await HandleGetQueueAsync(context, db, downloadManager);
             break;
     }
 }
