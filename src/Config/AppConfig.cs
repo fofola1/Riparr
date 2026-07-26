@@ -30,6 +30,12 @@ namespace Riparr.Config
             Directory.CreateDirectory(IncompleteFolder);
             Directory.CreateDirectory(ToolsFolder);
             
+            string[] defaultCategories = new[] { "tv", "anime", "movies", "sonarr", "radarr" };
+            foreach (var cat in defaultCategories)
+            {
+                Directory.CreateDirectory(Path.Combine(CompletedFolder, cat));
+            }
+
             var dbDir = Path.GetDirectoryName(Path.GetFullPath(DbPath));
             if (!string.IsNullOrEmpty(dbDir))
             {
