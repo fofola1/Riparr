@@ -405,9 +405,25 @@ namespace Riparr.Services
             {
                 if (OperatingSystem.IsLinux() || OperatingSystem.IsFreeBSD() || OperatingSystem.IsMacOS())
                 {
-                    File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
-                                               UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute |
-                                               UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute);
+                    var mode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+                               UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute |
+                               UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute;
+
+                    if (File.Exists(path))
+                    {
+                        File.SetUnixFileMode(path, mode);
+                    }
+
+                    var dir = Directory.Exists(path) ? path : Path.GetDirectoryName(path);
+                    while (!string.IsNullOrEmpty(dir) && Directory.Exists(dir))
+                    {
+                        File.SetUnixFileMode(dir, mode);
+                        if (dir.Equals(AppConfig.DownloadsFolder, StringComparison.OrdinalIgnoreCase))
+                        {
+                            break;
+                        }
+                        dir = Path.GetDirectoryName(dir);
+                    }
                 }
             }
             catch (Exception ex)
