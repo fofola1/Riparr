@@ -418,7 +418,7 @@ namespace Riparr.Services
                     while (!string.IsNullOrEmpty(dir) && Directory.Exists(dir))
                     {
                         File.SetUnixFileMode(dir, mode);
-                        if (dir.Equals(AppConfig.DownloadsFolder, StringComparison.OrdinalIgnoreCase))
+                        if (dir.Equals("/downloads", StringComparison.OrdinalIgnoreCase) || dir.Equals(AppConfig.CompletedFolder, StringComparison.OrdinalIgnoreCase))
                         {
                             break;
                         }

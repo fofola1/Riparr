@@ -108,7 +108,7 @@ namespace Riparr.Services
             if (process.ExitCode != 0)
             {
                 // Fallback for ani-cli if initial selected index failed: retry without -S parameter
-                if (isAniCli && arguments.Contains("-S "))
+                if (isAniCli)
                 {
                     string cleanTitle = CleanAnimeTitle(job.Title);
                     string fallbackArguments = $"-d -e {job.Episode} \"{cleanTitle}\"";
@@ -238,22 +238,25 @@ namespace Riparr.Services
 
         private string CleanAnimeTitle(string title)
         {
-            // Remove group tag at start: "[MockSub] Frieren..." -> "Frieren..."
+            // 1. Remove group tag at start: "[AniCli] Tongari..." -> "Tongari..."
             string cleaned = Regex.Replace(title, @"^\[[^\]]+\]\s*", "");
 
-            // If it contains a colon, split and take the first part (e.g. "Frieren: Beyond Journey's End" -> "Frieren")
+            // 2. Remove season/episode markers: "... - S01E12 - 12 [1080p]" -> "... - 12 [1080p]" or "..."
+            cleaned = Regex.Replace(cleaned, @"\s*-\s*S?\d+E\d+.*", "", RegexOptions.IgnoreCase);
+            cleaned = Regex.Replace(cleaned, @"\s*-\s*E\d+.*", "", RegexOptions.IgnoreCase);
+
+            // 3. Remove resolution or extra tags like "[1080p]", "(HD)", etc.
+            cleaned = Regex.Replace(cleaned, @"\s*\[[^\]]+\]", "");
+            cleaned = Regex.Replace(cleaned, @"\s*\([^\)]+\)", "");
+
+            // 4. Remove standalone episode numbers at the end: "Tongari Boushi no Atelier 03" -> "Tongari Boushi no Atelier"
+            cleaned = Regex.Replace(cleaned, @"\s+\d{1,3}\s*$", "");
+
+            // 5. If it contains a colon, split and take the main title part (e.g. "Frieren: Beyond Journey's End" -> "Frieren")
             if (cleaned.Contains(":"))
             {
                 cleaned = cleaned.Split(':')[0];
             }
-
-            // Remove season/episode markers at the end: "... - S01E17 [1080p]" -> "..."
-            cleaned = Regex.Replace(cleaned, @"\s*-\s*S?\d+E\d+.*", "", RegexOptions.IgnoreCase);
-            cleaned = Regex.Replace(cleaned, @"\s*-\s*E\d+.*", "", RegexOptions.IgnoreCase);
-
-            // Remove resolution or extra tags like "[1080p]", "(HD)", etc.
-            cleaned = Regex.Replace(cleaned, @"\s*\[[^\]]+\]", "");
-            cleaned = Regex.Replace(cleaned, @"\s*\([^\)]+\)", "");
 
             return cleaned.Trim();
         }
