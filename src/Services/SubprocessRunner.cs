@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Net;
 using System.Net.Http;
 using Riparr.Models;
 using Riparr.Config;
@@ -56,7 +57,12 @@ namespace Riparr.Services
                 int selectedIndex = await GetAllAnimeIndexAsync(cleanTitle, episodeNum, cancellationToken);
                 
                 // ani-cli -d (download) -S <index> -e <episode> "<title>"
-                arguments = $"-d -S {selectedIndex} -e {job.Episode} \"{cleanTitle}\"";
+                string aniCliSearchQuery = cleanTitle;
+                if (aniCliSearchQuery.Contains(":"))
+                {
+                    aniCliSearchQuery = aniCliSearchQuery.Split(':')[0].Trim();
+                }
+                arguments = $"-d -S {selectedIndex} -e {job.Episode} \"{aniCliSearchQuery}\"";
             }
             else
             {
@@ -111,7 +117,12 @@ namespace Riparr.Services
                 if (isAniCli)
                 {
                     string cleanTitle = CleanAnimeTitle(job.Title);
-                    string fallbackArguments = $"-d -e {job.Episode} \"{cleanTitle}\"";
+                    string aniCliSearchQuery = cleanTitle;
+                    if (aniCliSearchQuery.Contains(":"))
+                    {
+                        aniCliSearchQuery = aniCliSearchQuery.Split(':')[0].Trim();
+                    }
+                    string fallbackArguments = $"-d -e {job.Episode} \"{aniCliSearchQuery}\"";
                     
                     var fallbackStartInfo = new ProcessStartInfo
                     {
@@ -240,6 +251,7 @@ namespace Riparr.Services
         {
             // 1. Remove group tag at start: "[AniCli] Tongari..." -> "Tongari..."
             string cleaned = Regex.Replace(title, @"^\[[^\]]+\]\s*", "");
+            cleaned = cleaned.Replace("’", "'");
 
             // 2. Remove season/episode markers: "... - S01E12 - 12 [1080p]" -> "... - 12 [1080p]" or "..."
             cleaned = Regex.Replace(cleaned, @"\s*-\s*S?\d+E\d+.*", "", RegexOptions.IgnoreCase);
@@ -263,81 +275,43 @@ namespace Riparr.Services
                 client.DefaultRequestHeaders.Add("Referer", "https://youtu-chan.com");
                 client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
 
-                var graphqlQuery = new
+                string searchQuery = cleanTitle;
+                if (searchQuery.Contains(":"))
                 {
-                    variables = new
-                    {
-                        search = new
-                        {
-                            allowAdult = false,
-                            allowUnknown = false,
-                            query = cleanTitle
-                        },
-                        limit = 40,
-                        page = 1,
-                        translationType = "sub",
-                        countryOrigin = "ALL"
-                    },
-                    query = "query($search: SearchInput $limit: Int $page: Int $translationType: VaildTranslationTypeEnumType $countryOrigin: VaildCountryOriginEnumType) { shows(search: $search limit: $limit page: $page translationType: $translationType countryOrigin: $countryOrigin) { edges { _id name availableEpisodes } } }"
-                };
+                    searchQuery = searchQuery.Split(':')[0].Trim();
+                }
 
-                string jsonPayload = JsonSerializer.Serialize(graphqlQuery);
-                using var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+                string searchUrl = $"https://anidb.app/browse?q={Uri.EscapeDataString(searchQuery)}";
+                var response = await client.GetAsync(searchUrl, cancellationToken);
 
-                var response = await client.PostAsync("https://api.allanime.day/api", content, cancellationToken);
                 if (response.IsSuccessStatusCode)
                 {
-                    string jsonResponse = await response.Content.ReadAsStringAsync(cancellationToken);
-                    using var doc = JsonDocument.Parse(jsonResponse);
-                    if (doc.RootElement.TryGetProperty("data", out var dataEl) &&
-                        dataEl.TryGetProperty("shows", out var showsEl) &&
-                        showsEl.TryGetProperty("edges", out var edgesEl) &&
-                        edgesEl.ValueKind == JsonValueKind.Array)
+                    string html = await response.Content.ReadAsStringAsync(cancellationToken);
+                    
+                    var matches = Regex.Matches(html, @"href=\""https://anidb\.app/anime/[a-z0-9-]+-[0-9]+\""[^>]*title=\""([^\""]+)\""");
+                    
+                    int bestIndex = 1;
+                    int currentIndex = 1;
+
+                    foreach (Match match in matches)
                     {
-                        int bestIndex = 1;
-                        int maxEpisodes = -1;
-                        int currentIndex = 1;
+                        string showName = System.Net.WebUtility.HtmlDecode(match.Groups[1].Value);
 
-                        foreach (var edge in edgesEl.EnumerateArray())
+                        if (showName.Equals(cleanTitle, StringComparison.OrdinalIgnoreCase))
                         {
-                            string showName = edge.TryGetProperty("name", out var nameProp) ? nameProp.GetString() ?? "" : "";
-                            int subCount = 0;
-                            int dubCount = 0;
-                            if (edge.TryGetProperty("availableEpisodes", out var epEl))
-                            {
-                                if (epEl.TryGetProperty("sub", out var subEl) && subEl.ValueKind == JsonValueKind.Number)
-                                {
-                                    subCount = subEl.GetInt32();
-                                }
-                                if (epEl.TryGetProperty("dub", out var dubEl) && dubEl.ValueKind == JsonValueKind.Number)
-                                {
-                                    dubCount = dubEl.GetInt32();
-                                }
-                            }
-
-                            int totalEp = Math.Max(subCount, dubCount);
-                            if (totalEp >= episode)
-                            {
-                                bool isTitleMatch = showName.Equals(cleanTitle, StringComparison.OrdinalIgnoreCase) ||
-                                                     showName.Contains(cleanTitle, StringComparison.OrdinalIgnoreCase) ||
-                                                     cleanTitle.Contains(showName, StringComparison.OrdinalIgnoreCase);
-
-                                if (isTitleMatch && totalEp > maxEpisodes)
-                                {
-                                    maxEpisodes = totalEp;
-                                    bestIndex = currentIndex;
-                                }
-                                else if (maxEpisodes == -1 && totalEp > maxEpisodes)
-                                {
-                                    maxEpisodes = totalEp;
-                                    bestIndex = currentIndex;
-                                }
-                            }
-                            currentIndex++;
+                            return currentIndex;
+                        }
+                        
+                        if (showName.Contains(cleanTitle, StringComparison.OrdinalIgnoreCase) ||
+                            cleanTitle.Contains(showName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            bestIndex = currentIndex;
                         }
 
-                        return bestIndex;
+                        currentIndex++;
                     }
+
+                    return bestIndex;
                 }
             }
             catch (Exception)
