@@ -17,7 +17,7 @@ namespace Riparr.Services
     {
         private static readonly Regex PercentageRegex = new(@"\b(\d+(?:\.\d+)?)%", RegexOptions.Compiled);
         private static readonly Regex SpeedRegex = new(@"\b(\d+(?:\.\d+)?\s*(?:[KMGT]i?B/s|[KMGT]B/s|[kmgt]/s))\b", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-        private static readonly Regex SizeRegex = new(@"(?:of|/)\s*(\d+(?:\.\d+)?\s*(?:[KMGT]i?B|[KMGT]B))\b", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        private static readonly Regex SizeRegex = new(@"(?:of|/)\s*~?\s*(\d+(?:\.\d+)?\s*(?:[KMGT]i?B|[KMGT]B))\b", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         public async Task<bool> RunDownloadAsync(
             DownloadJob job, 
