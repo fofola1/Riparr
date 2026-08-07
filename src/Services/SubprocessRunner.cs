@@ -252,12 +252,6 @@ namespace Riparr.Services
             // 4. Remove standalone episode numbers at the end: "Tongari Boushi no Atelier 03" -> "Tongari Boushi no Atelier"
             cleaned = Regex.Replace(cleaned, @"\s+\d{1,3}\s*$", "");
 
-            // 5. If it contains a colon, split and take the main title part (e.g. "Frieren: Beyond Journey's End" -> "Frieren")
-            if (cleaned.Contains(":"))
-            {
-                cleaned = cleaned.Split(':')[0];
-            }
-
             return cleaned.Trim();
         }
 

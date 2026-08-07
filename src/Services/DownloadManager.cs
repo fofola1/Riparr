@@ -334,7 +334,7 @@ namespace Riparr.Services
                 // Scan for the most recently modified file in IncompleteFolder that fits video types
                 var searchDir = new DirectoryInfo(AppConfig.IncompleteFolder);
                 var downloadedFile = searchDir.GetFiles("*.*", SearchOption.AllDirectories)
-                    .Where(f => f.LastWriteTimeUtc >= startTime.AddSeconds(-30)) // Give buffer for clock diffs
+                    .Where(f => f.LastWriteTimeUtc >= startTime.AddMinutes(-5)) // Give buffer for clock diffs
                     .Where(f => !f.Name.EndsWith(".temp") && !f.Name.EndsWith(".part"))
                     .OrderByDescending(f => f.LastWriteTimeUtc)
                     .FirstOrDefault();
