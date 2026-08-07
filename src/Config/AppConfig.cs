@@ -5,6 +5,11 @@ namespace Riparr.Config
 {
     public static class AppConfig
     {
+        public static string DownloadsFolder =>
+            Environment.GetEnvironmentVariable("DOWNLOADS_DIR") ??
+            Path.GetDirectoryName(Path.GetFullPath(CompletedFolder)) ??
+            "/downloads";
+
         public static string CompletedFolder => 
             Environment.GetEnvironmentVariable("DOWNLOADS_COMPLETED_DIR") ?? "/downloads/completed";
 
